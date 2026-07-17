@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from google import genai
 from google.genai import types
 
-from prompt import SYSTEM_PROMPT
+from prompt import WORKOUT_SYSTEM_PROMPT, RECIPE_SYSTEM_PROMPT
 
 load_dotenv()
 
@@ -52,6 +52,25 @@ class WorkoutRequest(BaseModel):
     health: Health
 
 
+class RecipeRequest(BaseModel):
+    dish_name: str
+
+
+class Macronutrients(BaseModel):
+    protein: str
+    carbohydrates: str
+    fat: str
+
+
+class RecipeResponse(BaseModel):
+    dishName: str
+    ingredients: list[str]
+    recipe: list[str]
+    healthRating: int
+    calories: int
+    macronutrients: Macronutrients
+
+
 @app.get("/")
 def home():
     return {
@@ -59,7 +78,7 @@ def home():
     }
 
 
-@app.post("/generate-plan")
+@app.post("/workout-plan-generator")
 async def generate_plan(request: WorkoutRequest):
 
     payload = request.model_dump()
@@ -80,9 +99,50 @@ Return JSON only.
             model="gemini-2.5-flash",
             contents=user_prompt,
             config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=WORKOUT_SYSTEM_PROMPT,
                 temperature=0.3,
                 response_mime_type="application/json"
+            )
+        )
+
+        print("\n========== AI RESPONSE ==========\n")
+        print(response.text)
+        print("\n===============================\n")
+
+        return json.loads(response.text)
+
+    except Exception as e:
+
+        print(e)
+
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
+@app.post("/recipe-generator")
+async def generate_recipe(request: RecipeRequest):
+
+    payload = request.model_dump()
+
+    user_prompt = f"""
+I want to make the following dish: {payload['dish_name']}
+
+Please provide the recipe and nutritional information.
+Return JSON only.
+"""
+
+    try:
+
+        response = client.models.generate_content(
+            model="gemini-2.5-flash",
+            contents=user_prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=RECIPE_SYSTEM_PROMPT,
+                temperature=0.3,
+                response_mime_type="application/json",
+                response_schema=RecipeResponse,
             )
         )
 
